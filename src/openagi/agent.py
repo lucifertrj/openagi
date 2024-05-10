@@ -7,6 +7,7 @@ from openagi.actions.base import BaseAction
 from openagi.llms.azure import LLMBaseModel
 from openagi.planner.task_decomposer import BasePlanner, TaskPlanner
 from openagi.tasks.lists import TaskLists
+from openagi.memory import LTMemory, STMemory
 from openagi.prompts.execution import TaskExecutor
 from openagi.utils.extraction import get_classes_from_json, get_last_json
 
@@ -19,8 +20,12 @@ class Admin(BaseModel):
     llm: Optional[LLMBaseModel] = Field(
         description="LLM Model to be used.",
     )
-    st_memory: Optional[Any] = None
-    lt_memory: Optional[Any] = None
+    st_memory: Optional[Any] = Field(
+        description="Short Term Memory to be used.",            #TODO: Add base model of memory (which will have add, save, search, method)
+    )
+    lt_memory: Optional[Any] = Field(
+        description="Long Term Memory to be used.",
+    )
     actions: Optional[BaseAction] = Field(
         default=None,
         description="Actions that the Agent supports",
@@ -54,8 +59,7 @@ class Admin(BaseModel):
             cur_task = task_lists.get_next_unprocessed_task()
             # Execute tasks using
             res = self.execute(cur_task)
-            # Add task and res to STMemory
-            # self.st_memory.add(curr_task)
+            self.st_memory.add(res, task=cur_task)
             cur_task.set_result(res)
             steps += 1
 
@@ -91,7 +95,7 @@ class Admin(BaseModel):
             act = act_cls(**params)
             res = act()
 
-        # TODO: Memory
+        self.lt_memory.add(st_memory=self.st_memory, task_id = self.task_id)
         return res
 
 
