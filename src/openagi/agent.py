@@ -20,10 +20,10 @@ class Admin(BaseModel):
     llm: Optional[LLMBaseModel] = Field(
         description="LLM Model to be used.",
     )
-    st_memory: Optional[Any] = Field(
+    st_memory: Optional[STMemory] = Field(
         description="Short Term Memory to be used.",            #TODO: Add base model of memory (which will have add, save, search method)
     )
-    lt_memory: Optional[Any] = Field(
+    lt_memory: Optional[LTMemory] = Field(
         description="Long Term Memory to be used.",
     )
     actions: Optional[BaseAction] = Field(
@@ -59,7 +59,11 @@ class Admin(BaseModel):
             cur_task = task_lists.get_next_unprocessed_task()
             # Execute tasks using
             res = self.execute(cur_task)
-            self.st_memory.add(res, task=cur_task)
+            if self.st_memory:
+                self.st_memory.save_agent_exec(cur_task.name, [act.cls_doc for act in self.actions], 'admin')
+                self.st_memory.save_tool_exec(cur_task.name, res)
+            if self.lt_memory:
+                self.lt_memory.memorize(cur_task.name, {'result': res})
             cur_task.set_result(res)
             steps += 1
 
@@ -80,7 +84,6 @@ class Admin(BaseModel):
             all_tasks=all_tasks,
             current_task_name=task.name,
             current_description=task.description,
-            previous_task=self.st_memory.get_previous_task(),
             supported_actions=actions_dict,
         )
         te = TaskExecutor.from_template(**te_vars)
@@ -94,8 +97,6 @@ class Admin(BaseModel):
             params["prev_obs"] = res
             act = act_cls(**params)
             res = act()
-
-        self.lt_memory.add(st_memory=self.st_memory, task_id = self.task_id)
         return res
 
 
