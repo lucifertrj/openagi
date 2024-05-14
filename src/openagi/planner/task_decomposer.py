@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Dict, Optional, Union
 
 from pydantic import Field
@@ -23,15 +24,16 @@ class TaskPlanner(BasePlanner):
     prompt: BasePrompt = Field(
         default=TaskCreator(), description="Prompt to be used"
     )  # TODO: Add default planner
-    llm: Optional[LLMBaseModel] = Field(
-        default=None, description="LLM Model to be used"
-    )
+    llm: Optional[LLMBaseModel] = Field(default=None, description="LLM Model to be used")
 
     def _extract_task_from_response(self, llm_response: str) -> Union[str, None]:
+        logging.info(f"{llm_response=}")
         return get_last_json(llm_response)
 
-    def _should_clarify(self, response: str) -> bool:
+    def _should_clarify(self, query: str) -> bool:
         # TODO: Setup a way for human intervention
+        if "<clarify_from_human>" in query:
+            return True
         return False
 
     def plan(self, query: str) -> Dict:
@@ -40,6 +42,7 @@ class TaskPlanner(BasePlanner):
         resp = self.llm.run(prompt)
         while self.human_intervene and self._should_clarify(resp):
             # TODO: Add logic for taking input from the user using actions
-            pass
+            human_intervene = self.actions(query=query)
+            resp = human_intervene.execute()
         tasks = self._extract_task_from_response(llm_response=resp)
         return tasks
