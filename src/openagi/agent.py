@@ -9,7 +9,7 @@ from openagi.actions.base import BaseAction
 from openagi.llms.azure import LLMBaseModel
 from openagi.planner.task_decomposer import BasePlanner, TaskPlanner
 from openagi.tasks.lists import TaskLists
-from openagi.memory import LTMemory, STMemory
+from openagi.memory import Memory
 from openagi.prompts.execution import TaskExecutor
 from openagi.tasks.task import Task
 from openagi.utils.extraction import get_classes_from_json, get_last_json
@@ -23,11 +23,9 @@ class Admin(BaseModel):
     llm: Optional[LLMBaseModel] = Field(
         description="LLM Model to be used.",
     )
-    st_memory: Optional[STMemory] = Field(
-        description="Short Term Memory to be used.",
-    )
-    lt_memory: Optional[LTMemory] = Field(
-        description="Long Term Memory to be used.",
+    memory: Optional[Memory] = Field(        # memory=Memory(recall=True, remember=True) recall helps recover previous actions, remember helps framework understand to memorize the act_obv
+        default=Memory(),
+        description="Memory to be used.",
     )
     actions: Optional[BaseAction] = Field(
         default=None,
@@ -90,17 +88,15 @@ class Admin(BaseModel):
             # Fail the whole processs & convey to the users
         # Final result
         logging.info(f"Final Result: {res}")
-        if self.st_memory:
-            self.st_memory.save_admin_exec(
-                query=query,
-                planned_tasks=list(task_lists),
-                final_res=res,
-            )
-        if self.lt_memory:
-            self.lt_memory.memorize(
-                task=query,
-                information=f"Admin agent executed the query: {query}, with the following tasks: {task_lists}, and the final result: {res}"
-            )
+        self.memory.save(
+            query=query,
+            planned_tasks=list(task_lists),
+            final_res=res,
+        )
+        self.memory.memorize(
+            task=query,
+            information=f"Admin agent executed the query: {query}, with the following tasks: {task_lists}, and the final result: {res}"
+        )
         return res
 
     def run_action(self, action_cls: str, **kwargs):
@@ -127,7 +123,7 @@ class Admin(BaseModel):
             all_tasks=all_tasks,
             current_task_name=task.name,
             current_description=task.description,
-            previous_task=self.lt_memory.search(task.name),
+            previous_task=self.memory.search(query=query),
             supported_actions=actions_dict,
         )
         # TODO: Make TaskExecutor class customizable
